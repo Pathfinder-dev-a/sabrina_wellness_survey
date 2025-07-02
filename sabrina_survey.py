@@ -1,14 +1,22 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
+# Configure page
 st.set_page_config(page_title="Sabrina Wellness Survey", page_icon="🪶")
 
+# Setup credentials from Streamlit Secrets
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds_dict = st.secrets["gcp_service"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
+client = gspread.authorize(creds)
+sheet = client.open("Sabrina Wellness Responses").sheet1
+
+# App content
 st.title("🪶 Sabrina Wellness Survey")
 st.markdown("Track your well-being using Indigenous knowledge systems and personal reflection.")
-
-# ------------- INPUT SECTION --------------------
 
 name = st.text_input("👤 Your Name:")
 date = st.date_input("📅 Date", datetime.date.today())
@@ -35,37 +43,24 @@ with st.expander("🌱 Spiritual (East - Yellow)"):
 st.markdown("## 💬 Final Reflections")
 reflection = st.text_area("Optional reflections, teachings, or dreams...")
 
-# ------------- SUBMIT SECTION --------------------
-
 if st.button("✅ Submit Survey"):
-    new_entry = pd.DataFrame([{
-        "Name": name,
-        "Date": date,
-        "Mental Clarity": clarity,
-        "Overthinking": overthinking,
-        "Emotional State": feeling,
-        "Support Felt": support,
-        "Sleep Quality": sleep,
-        "Energy Level": energy,
-        "Pain Present": pain,
-        "Land Connection": land,
-        "Gratitude": gratitude,
-        "Reflection": reflection
-    }])
-
-    file_path = "sabrina_responses.csv"
-
-    try:
-        existing = pd.read_csv(file_path)
-        updated = pd.concat([existing, new_entry], ignore_index=True)
-    except FileNotFoundError:
-        updated = new_entry  # Create new file if none exists
-
-    updated.to_csv(file_path, index=False)
-    st.success("🌿 Your response has been saved.")
+    new_row = [
+        name,
+        str(date),
+        clarity,
+        str(overthinking),
+        feeling,
+        support,
+        sleep,
+        energy,
+        str(pain),
+        land,
+        gratitude,
+        reflection,
+    ]
+    sheet.append_row(new_row)
+    st.success("🌿 Your response has been saved to Google Sheets.")
     st.balloons()
-
-# ------------- FOOTER --------------------
 
 st.markdown("---")
 st.markdown("*“The land knows you, even when you are lost.” – Cree Elder*")

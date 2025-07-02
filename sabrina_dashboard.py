@@ -1,50 +1,56 @@
 import streamlit as st
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
+# Page config
 st.set_page_config(page_title="Sabrina Wellness Dashboard", page_icon="📊", layout="wide")
 
-st.title("📊 Sabrina Wellness Dashboard")
-st.markdown("Real-time visualization of community wellness using the **Medicine Wheel** as a guide.")
+# Google Sheets auth
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds_dict = st.secrets["gcp_service"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
+client = gspread.authorize(creds)
+sheet = client.open("Sabrina Wellness Responses").sheet1
 
-# Load data
-file_path = "sabrina_responses.csv"
-try:
-    df = pd.read_csv(file_path, parse_dates=["Date"])
-    df["Date"] = pd.to_datetime(df["Date"])
-except FileNotFoundError:
-    st.warning("⚠️ No survey data found yet. Submit some responses to begin.")
+# Load sheet data
+data = sheet.get_all_records()
+if not data:
+    st.warning("⚠️ No survey data available.")
     st.stop()
 
-# Sidebar filters
-st.sidebar.header("🔍 Filter Responses")
-name_filter = st.sidebar.selectbox("Select Name (or All)", ["All"] + sorted(df["Name"].dropna().unique().tolist()))
-if name_filter != "All":
-    df = df[df["Name"] == name_filter]
+df = pd.DataFrame(data)
+df["Date"] = pd.to_datetime(df["Date"])
 
-# Quadrants
-st.markdown("## 🧭 Medicine Wheel Domains")
+st.title("📊 Sabrina Wellness Dashboard")
+st.markdown("Visualizing wellness data with the guidance of the Medicine Wheel.")
 
+# Filter by name
+names = ["All"] + sorted(df["Name"].dropna().unique().tolist())
+selected_name = st.sidebar.selectbox("🔎 Filter by Name", names)
+if selected_name != "All":
+    df = df[df["Name"] == selected_name]
+
+# Quadrant visuals
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🧠 Mental (North - White)")
-    st.metric("Average Mental Clarity", round(df["Mental Clarity"].mean(), 1))
+    st.metric("Avg Mental Clarity", round(df["Mental Clarity"].mean(), 1))
     st.bar_chart(df.groupby("Date")["Mental Clarity"].mean())
 
     st.write("**Overthinking Trends:**")
-    st.line_chart(df["Overthinking"].value_counts(normalize=True))
+    overthink_count = df["Overthinking"].value_counts()
+    st.bar_chart(overthink_count)
 
 with col2:
     st.subheader("❤️ Emotional (South - Red)")
-    emotional_counts = df["Emotional State"].value_counts()
-    st.write("**Emotional Check-ins:**")
-    st.bar_chart(emotional_counts)
+    emo_counts = df["Emotional State"].value_counts()
+    st.bar_chart(emo_counts)
 
     support_counts = df["Support Felt"].value_counts()
     st.write("**Support Felt:**")
     st.bar_chart(support_counts)
-
-st.markdown("---")
 
 col3, col4 = st.columns(2)
 
@@ -52,15 +58,14 @@ with col3:
     st.subheader("💪 Physical (West - Black)")
     st.metric("Avg Sleep Quality", round(df["Sleep Quality"].mean(), 1))
     st.metric("Avg Energy Level", round(df["Energy Level"].mean(), 1))
-
+    pain_counts = df["Pain Present"].value_counts()
     st.write("**Pain Reports:**")
-    pain_data = df["Pain Present"].value_counts()
-    st.bar_chart(pain_data)
+    st.bar_chart(pain_counts)
 
 with col4:
     st.subheader("🌱 Spiritual (East - Yellow)")
     land_counts = df["Land Connection"].value_counts()
-    st.write("**Land Connection Check-ins:**")
+    st.write("**Land Connection:**")
     st.bar_chart(land_counts)
 
     st.write("**Gratitude Examples:**")
@@ -68,10 +73,10 @@ with col4:
         st.markdown(f"- {entry}")
 
 # Final reflections
-if st.checkbox("Show Reflections"):
+if st.checkbox("Show Final Reflections"):
     st.subheader("💬 Final Reflections")
     for i, entry in df["Reflection"].dropna().items():
         st.markdown(f"🪶 *{entry}*")
 
 st.markdown("---")
-st.caption("Medicine Wheel © All Nations · This dashboard is grounded in Indigenous wellness teachings.")
+st.caption("This dashboard uses the Medicine Wheel as a sacred guide for healing and balance.")
